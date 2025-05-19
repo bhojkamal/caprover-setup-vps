@@ -1,0 +1,10 @@
+- name: Ensure CapRover is installed via Docker
+  docker_container:
+    name: caprover
+    image: caprover/caprover
+    restart_policy: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    env:
+      MAIN_NODE_IP_ADDRESS: "{{ ansible_host }}"
+    state: started
