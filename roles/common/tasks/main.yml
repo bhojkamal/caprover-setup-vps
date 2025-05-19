@@ -1,0 +1,25 @@
+- name: Wait for apt lock to be released
+  shell: |
+    while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+      sleep 5
+    done
+  changed_when: false
+  
+- name: Update and upgrade apt packages
+  apt:
+    update_cache: yes
+    upgrade: dist
+
+- name: Ensure essential packages are installed
+  apt:
+    name:
+      - git
+      - curl
+      - ufw
+      - vim
+      - fail2ban
+    state: present
+
+- name: Set timezone to Asia/Kathmandu
+  timezone:
+    name: Asia/Kathmandu    

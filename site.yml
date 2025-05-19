@@ -1,0 +1,7 @@
+- name: Set up caprover_lara server
+  hosts: all
+  become: true
+  roles:
+    - common
+    - docker
+    - users

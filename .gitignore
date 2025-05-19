@@ -1,0 +1,14 @@
+#secret
+.vault.yml
+vault.yml
+# Local configuration
+# IDEs
+.idea/
+# macOS
+.DS_Store
+# Windows
+Thumbs.db
+# Linux
+*~
+# Ansible
+*.retry

@@ -1,0 +1,27 @@
+- name: Ensure users exist
+  user:
+    name: "{{ item.name }}"
+    shell: "{{ item.shell | default('/bin/bash') }}"
+    state: present
+    create_home: true
+  loop:
+    - { name: 'caprover_lara' }
+
+- name: Ensure .ssh directory exists
+  file:
+    path: "/home/{{ item.name }}/.ssh"
+    state: directory
+    mode: '0700'
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+  loop:
+    - { name: 'caprover_lara' }
+
+- name: Add authorized SSH keys
+  authorized_key:
+    user: "{{ item.name }}"
+    key: "{{ lookup('file', item.key_path) }}"
+    state: present
+    manage_dir: false
+  loop:
+    - { name: 'caprover_lara', key_path: '~/.ssh/id_rsa.pub' }
