@@ -1,10 +1,47 @@
-- name: Ensure CapRover is installed via Docker
-  docker_container:
-    name: caprover
+---
+- name: Ensure /captain directory exists
+  ansible.builtin.file:
+    path: /captain
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+  tags:
+    - caprover_prerequisites
+
+- name: Open firewall ports
+  ansible.builtin.include_tasks: firewall.yml
+  tags:
+    - caprover_prerequisites
+    - firewall
+
+- name: Deploy CapRover container
+  community.docker.docker_container:
+    name: captain-root
     image: caprover/caprover
     restart_policy: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "3000:3000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - /captain:/captain
     env:
-      MAIN_NODE_IP_ADDRESS: "{{ ansible_host }}"
+      ACCEPTED_TERMS: "true"
+      MAIN_NODE_IP_ADDRESS: "{{ ansible_host | default(ansible_facts['default_ipv4']['address']) }}"
+      # DEFAULT_PASSWORD: "{{ caprover_default_password | default('captain42') }}"
     state: started
+    labels:
+      com.caprover.app.name: captain-root
+    networks:
+      - name: bridge
+    cpu_shares: 512
+    memory: "512m"
+    log_driver: json-file
+    log_opt:
+      max-size: "10m"
+      max-file: "3"
+  tags:
+    - caprover_install
+    - caprover_service
