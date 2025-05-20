@@ -1,3 +1,4 @@
+---
 - name: Ensure users exist
   user:
     name: "{{ item.name }}"
