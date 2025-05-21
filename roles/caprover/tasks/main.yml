@@ -1,4 +1,10 @@
 ---
+- name: Ensure lsof is installed for port checks
+  ansible.builtin.package:
+    name: lsof
+    state: present
+  tags: [caprover_prerequisites]
+
 - name: Get all containers info
   community.docker.docker_host_info:
     containers: yes
@@ -40,21 +46,18 @@
   when: docker_prune_result.stdout != ""
   tags: [caprover_prerequisites]
 
-# --- NEW STEP: RESTART DOCKER SERVICE ---
 - name: Restart Docker service to ensure ports are released
   ansible.builtin.systemd:
     name: docker
     state: restarted
-    daemon_reload: true # Ensures systemd daemon reloads if config changed
+    daemon_reload: true
   tags: [caprover_prerequisites]
 
-- name: Wait for 15 seconds after Docker restart for daemon to stabilize
+- name: Wait for 10 seconds after Docker restart for daemon to stabilize
   ansible.builtin.pause:
-    seconds: 15 # Increased pause to give Docker more time to come up cleanly
+    seconds: 10
   tags: [caprover_prerequisites]
-# --- END NEW STEP ---
 
-# The lsof check tasks remain the same as they are crucial
 - name: Check for non-Docker processes using port 80 or 443
   ansible.builtin.shell: |
     lsof -i :80 || lsof -i :443
@@ -123,3 +126,4 @@
   tags:
     - caprover_install
     - caprover_service
+    - caprover_prerequisites
