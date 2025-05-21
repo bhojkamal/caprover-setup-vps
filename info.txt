@@ -1,0 +1,7 @@
+Tear down existing Swarm-based CapRover:
+
+docker service rm captain-captain
+docker service rm captain-nginx
+docker service rm captain-certbot
+docker network rm captain-overlay-network
+docker swarm leave --force

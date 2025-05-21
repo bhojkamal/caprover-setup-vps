@@ -1,4 +1,56 @@
 ---
+- name: Get all containers info
+  community.docker.docker_host_info:
+    containers: yes
+  register: docker_containers
+  tags: [caprover_prerequisites]
+
+- name: Show containers using 80 or 443
+  debug:
+    msg: "Container {{ item.Names[0] }} ({{ item.Id }}) is using ports: {{ item.Ports }}"
+  loop: "{{ docker_containers.containers }}"
+  when:
+    - item.State.Running is defined and item.State.Running == true
+    - item.Ports is defined
+    - item.Ports | selectattr('PublicPort', 'defined') | selectattr('PublicPort', 'in', [80, 443]) | list | length > 0
+  tags: [caprover_prerequisites]
+
+- name: Stop containers using port 80 or 443
+  community.docker.docker_container:
+    name: "{{ item.Id }}"
+    state: stopped
+  loop: "{{ docker_containers.containers }}"
+  when:
+    - item.State.Running is defined and item.State.Running == true
+    - item.Ports is defined
+    - item.Ports | selectattr('PublicPort', 'defined') | selectattr('PublicPort', 'in', [80, 443]) | list | length > 0
+  tags: [caprover_prerequisites]
+
+- name: Wait for 5 seconds to ensure containers are fully stopped
+  ansible.builtin.pause:
+    seconds: 5
+  tags: [caprover_prerequisites]
+
+- name: Check for non-Docker processes using port 80 or 443
+  ansible.builtin.shell: |
+    lsof -i :80 || lsof -i :443
+  register: port_check_result
+  failed_when: false # Don't fail the playbook if lsof finds something
+  changed_when: false
+  tags: [caprover_prerequisites]
+
+- name: Display processes using port 80 or 443 (if any)
+  debug:
+    msg: "WARNING: The following processes are using ports 80 or 443: {{ port_check_result.stdout }}"
+  when: port_check_result.stdout != ""
+  tags: [caprover_prerequisites]
+
+- name: Fail if ports 80 or 443 are still in use by non-Docker processes
+  ansible.builtin.fail:
+    msg: "Ports 80 or 443 are still allocated by non-Docker processes. Please stop them manually before deploying CapRover. Details: {{ port_check_result.stdout }}"
+  when: port_check_result.stdout != "" and port_check_result.rc == 0
+  tags: [caprover_prerequisites]
+
 - name: Ensure /captain directory exists
   ansible.builtin.file:
     path: /captain
@@ -18,7 +70,7 @@
 - name: Deploy CapRover container
   community.docker.docker_container:
     name: captain-root
-    image: caprover/caprover
+    image: caprover/caprover:latest
     restart_policy: always
     ports:
       - "80:80"
@@ -29,8 +81,7 @@
       - /captain:/captain
     env:
       ACCEPTED_TERMS: "true"
-      MAIN_NODE_IP_ADDRESS: "{{ ansible_host | default(ansible_facts['default_ipv4']['address']) }}"
-      # DEFAULT_PASSWORD: "{{ caprover_default_password | default('captain42') }}"
+      MAIN_NODE_IP_ADDRESS: "{{ ansible_default_ipv4.address }}"
     state: started
     labels:
       com.caprover.app.name: captain-root
@@ -42,6 +93,7 @@
     log_opt:
       max-size: "10m"
       max-file: "3"
+    recreate: yes
   tags:
     - caprover_install
     - caprover_service
