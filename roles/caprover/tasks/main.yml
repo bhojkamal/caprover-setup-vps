@@ -15,10 +15,11 @@
     - item.Ports | selectattr('PublicPort', 'defined') | selectattr('PublicPort', 'in', [80, 443]) | list | length > 0
   tags: [caprover_prerequisites]
 
-- name: Stop containers using port 80 or 443
+- name: Stop and remove containers using port 80 or 443
   community.docker.docker_container:
     name: "{{ item.Id }}"
-    state: stopped
+    state: absent # Change to absent to ensure removal
+    force_kill: true # Force kill if it doesn't stop gracefully
   loop: "{{ docker_containers.containers }}"
   when:
     - item.State.Running is defined and item.State.Running == true
@@ -26,16 +27,36 @@
     - item.Ports | selectattr('PublicPort', 'defined') | selectattr('PublicPort', 'in', [80, 443]) | list | length > 0
   tags: [caprover_prerequisites]
 
-- name: Wait for 5 seconds to ensure containers are fully stopped
-  ansible.builtin.pause:
-    seconds: 5
+- name: Clean up dangling Docker resources (networks, volumes)
+  ansible.builtin.shell: |
+    docker system prune --force --volumes
+  # This command removes:
+  # - all stopped containers
+  # - all networks not used by at least one container
+  # - all dangling images
+  # - all dangling build cache
+  # - all unused volumes (with --volumes)
+  register: docker_prune_result
+  changed_when: "'Total reclaimed space' in docker_prune_result.stdout"
   tags: [caprover_prerequisites]
 
+- name: Display Docker prune results
+  debug:
+    msg: "{{ docker_prune_result.stdout_lines }}"
+  when: docker_prune_result.stdout != ""
+  tags: [caprover_prerequisites]
+
+- name: Wait for 10 seconds to ensure ports are released after Docker cleanup
+  ansible.builtin.pause:
+    seconds: 10
+  tags: [caprover_prerequisites]
+
+# The lsof check tasks remain the same as they are crucial
 - name: Check for non-Docker processes using port 80 or 443
   ansible.builtin.shell: |
     lsof -i :80 || lsof -i :443
   register: port_check_result
-  failed_when: false # Don't fail the playbook if lsof finds something
+  failed_when: false
   changed_when: false
   tags: [caprover_prerequisites]
 
@@ -82,6 +103,8 @@
     env:
       ACCEPTED_TERMS: "true"
       MAIN_NODE_IP_ADDRESS: "{{ ansible_default_ipv4.address }}"
+      # You can pre-set login password if needed
+      # DEFAULT_PASSWORD: "{{ caprover_default_password | default('captain42') }}"
     state: started
     labels:
       com.caprover.app.name: captain-root
