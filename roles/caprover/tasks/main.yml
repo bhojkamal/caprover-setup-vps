@@ -30,12 +30,6 @@
 - name: Clean up dangling Docker resources (networks, volumes)
   ansible.builtin.shell: |
     docker system prune --force --volumes
-  # This command removes:
-  # - all stopped containers
-  # - all networks not used by at least one container
-  # - all dangling images
-  # - all dangling build cache
-  # - all unused volumes (with --volumes)
   register: docker_prune_result
   changed_when: "'Total reclaimed space' in docker_prune_result.stdout"
   tags: [caprover_prerequisites]
@@ -46,10 +40,19 @@
   when: docker_prune_result.stdout != ""
   tags: [caprover_prerequisites]
 
-- name: Wait for 10 seconds to ensure ports are released after Docker cleanup
-  ansible.builtin.pause:
-    seconds: 10
+# --- NEW STEP: RESTART DOCKER SERVICE ---
+- name: Restart Docker service to ensure ports are released
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted
+    daemon_reload: true # Ensures systemd daemon reloads if config changed
   tags: [caprover_prerequisites]
+
+- name: Wait for 15 seconds after Docker restart for daemon to stabilize
+  ansible.builtin.pause:
+    seconds: 15 # Increased pause to give Docker more time to come up cleanly
+  tags: [caprover_prerequisites]
+# --- END NEW STEP ---
 
 # The lsof check tasks remain the same as they are crucial
 - name: Check for non-Docker processes using port 80 or 443
