@@ -5,8 +5,7 @@
     shell: "{{ item.shell | default('/bin/bash') }}"
     state: present
     create_home: true
-  loop:
-    - { name: 'caprover_lara' }
+  loop: "{{ users }}"
 
 - name: Ensure .ssh directory exists
   file:
@@ -15,8 +14,7 @@
     mode: '0700'
     owner: "{{ item.name }}"
     group: "{{ item.name }}"
-  loop:
-    - { name: 'caprover_lara' }
+  loop: "{{ users }}"
 
 - name: Add authorized SSH keys
   authorized_key:
@@ -24,5 +22,4 @@
     key: "{{ lookup('file', item.key_path) }}"
     state: present
     manage_dir: false
-  loop:
-    - { name: 'caprover_lara', key_path: '~/.ssh/id_rsa.pub' }
+  loop: "{{ users }}"

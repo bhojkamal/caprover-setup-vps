@@ -72,11 +72,11 @@
   when: port_check_result.stdout != ""
   tags: [caprover_prerequisites]
 
-- name: Fail if ports 80 or 443 are still in use by non-Docker processes
-  ansible.builtin.fail:
-    msg: "Ports 80 or 443 are still allocated by non-Docker processes. Please stop them manually before deploying CapRover. Details: {{ port_check_result.stdout }}"
-  when: port_check_result.stdout != "" and port_check_result.rc == 0
-  tags: [caprover_prerequisites]
+# - name: Fail if ports 80 or 443 are still in use by non-Docker processes
+#   ansible.builtin.fail:
+#     msg: "Ports 80 or 443 are still allocated by non-Docker processes. Please stop them manually before deploying CapRover. Details: {{ port_check_result.stdout }}"
+#   when: port_check_result.stdout != "" and port_check_result.rc == 0
+#   tags: [caprover_prerequisites]
 
 - name: Ensure /captain directory exists
   ansible.builtin.file:

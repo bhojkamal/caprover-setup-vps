@@ -1,7 +1,65 @@
 Tear down existing Swarm-based CapRover:
 
+sudo docker service rm captain-captain captain-nginx captain-certbot
+sudo docker network rm captain-overlay-network
+sudo docker swarm leave --force
+
 docker service rm captain-captain
 docker service rm captain-nginx
 docker service rm captain-certbot
 docker network rm captain-overlay-network
 docker swarm leave --force
+sudo docker network prune -f
+sudo docker volume prune -f
+sudo rm -rf /captain 
+
+sudo systemctl stop docker.socket
+sudo systemctl stop docker.service
+
+sudo rm -rf /var/lib/docker/swarm
+sudo systemctl start docker.service
+sudo docker info | grep Swarm
+
+docker service rm captain-captain && docker service rm captain-nginx && docker service rm captain-certbot && docker network rm captain-overlay-network && docker swarm leave --force
+
+sudo docker service rm captain-captain captain-nginx captain-certbot 2>/dev/null
+sudo docker network rm captain-overlay-network 2>/dev/null
+sudo rm -rf /captain 
+# This is crucial to clear any bad config
+
+docker run -p 80:80 -p 443:443 -p 3000:3000 -e ACCEPTED_TERMS=true -v /var/run/docker.sock:/var/run/docker.sock -v /captain:/captain caprover/caprover
+
+docker run -d --restart unless-stopped --name caprover-main -p 80:80 -p 443:443 -p 3000:3000 -e ACCEPTED_TERMS=true -v /var/run/docker.sock:/var/run/docker.sock -v /captain:/captain caprover/caprover:latest
+
+sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sudo ufw allow 3000/tcp && sudo ufw enable
+
+docker run -d \
+           --restart unless-stopped \
+           --name caprover-main \
+           -p 80:80 \
+           -p 443:443 \
+           -p 3000:3000 \
+           -e ACCEPTED_TERMS=true \
+           -v /var/run/docker.sock:/var/run/docker.sock \
+           -v /captain:/captain \
+           caprover/caprover:latest
+
+docker run -e MAIN_NODE_IP_ADDRESS=64.227.144.188 \
+  -e CAPROVER_ROOT_DOMAIN=caprover_lara.lotusbookerp.work \
+  -e ACCEPTED_TERMS=true \
+  --restart always \
+  --cap-add=NET_ADMIN \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /captain:/captain \
+  -p 80:80 -p 443:443 -p 3000:3000 \
+  --name caprover \
+  caprover/caprover
+
+
+
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow 3000/tcp
+sudo ufw enable
+
+sudo docker info | grep Swarm

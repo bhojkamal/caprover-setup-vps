@@ -1,0 +1,37 @@
+---
+- name: Create Ansible user with sudo access
+  hosts: caprover_servers
+  become: true
+
+  vars:
+    new_user: caprover_lara
+    ssh_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+
+  tasks:
+    - name: Ensure the user '{{ new_user }}' exists
+      user:
+        name: "{{ new_user }}"
+        shell: /bin/bash
+        state: present
+        groups: sudo
+        append: yes
+
+    - name: Create .ssh directory for '{{ new_user }}'
+      file:
+        path: "/home/{{ new_user }}/.ssh"
+        state: directory
+        mode: '0700'
+        owner: "{{ new_user }}"
+        group: "{{ new_user }}"
+
+    - name: Add SSH public key to '{{ new_user }}' authorized_keys
+      authorized_key:
+        user: "{{ new_user }}"
+        key: "{{ ssh_key }}"
+        state: present
+
+    - name: Allow passwordless sudo for '{{ new_user }}'
+      copy:
+        dest: "/etc/sudoers.d/{{ new_user }}"
+        content: "{{ new_user }} ALL=(ALL) NOPASSWD:ALL\n"
+        mode: '0440'

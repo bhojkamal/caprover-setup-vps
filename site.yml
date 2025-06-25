@@ -1,9 +1,9 @@
 ---
-- name: Set up caprover_lara server
+- name: Set up server for application
   hosts: all
   become: true
   roles:
+    - users
     - common
     - docker
-    - users
     - caprover
