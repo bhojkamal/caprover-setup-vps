@@ -40,3 +40,10 @@
 - name: Ensure UFW is enabled
   community.general.ufw:
     state: enabled
+    
+# Allow SSH access on a specific port (if not using default port 22)    
+- name: Allow SSH access
+  community.general.ufw:
+    rule: allow
+    port: 22
+    proto: tcp
