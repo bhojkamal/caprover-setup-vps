@@ -13,9 +13,12 @@ This repository contains a complete Ansible playbook to automatically provision 
 - SSH access to the target server
 - A valid SSH private key (`~/.ssh/id_rsa` by default)
 - A properly configured `inventory/hosts.yml` file with your server details
+- sudo apt install python3-requests might need in some server in root.
 
 ## Inventory Example
+
 hosts.yml
+
 ```yaml
 all:
   vars:
@@ -31,10 +34,13 @@ all:
 ```
 
 ### Usage
+
 To run the full deployment:
+
 ```bash
 ansible-playbook -i inventory/hosts.yml site.yml
 ```
+
 `ansible-playbook site.yml` will do as inventory is set in ansible.cfg.
 
 This will:
@@ -50,9 +56,12 @@ Install Docker
 Install and configure CapRover
 
 ### PostgreSQL Access via SSH Tunnel (Optional)
+
 If using CapRover’s PostgreSQL service and want to connect from DBeaver or a local client:
+
 ```sh
 ssh -L 5432:localhost:5432 caprover_lara@<server-ip>
 ```
+
 Then connect to localhost:5432 in your DB client.
 You do NOT need to open port 5432 in the firewall when using an SSH tunnel.

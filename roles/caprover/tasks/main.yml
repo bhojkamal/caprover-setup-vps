@@ -23,14 +23,15 @@
 
 - name: Stop and remove containers using port 80 or 443
   community.docker.docker_container:
-    name: "{{ item.Id }}"
-    state: absent # Change to absent to ensure removal
-    force_kill: true # Force kill if it doesn't stop gracefully
+    name: "{{ item.Names[0] | regex_replace('^/', '') }}"
+    state: absent
+    force_kill: true
   loop: "{{ docker_containers.containers }}"
   when:
     - item.State.Running is defined and item.State.Running == true
     - item.Ports is defined
     - item.Ports | selectattr('PublicPort', 'defined') | selectattr('PublicPort', 'in', [80, 443]) | list | length > 0
+  ignore_errors: true
   tags: [caprover_prerequisites]
 
 - name: Clean up dangling Docker resources (networks, volumes)
@@ -72,17 +73,11 @@
   when: port_check_result.stdout != ""
   tags: [caprover_prerequisites]
 
-# - name: Fail if ports 80 or 443 are still in use by non-Docker processes
-#   ansible.builtin.fail:
-#     msg: "Ports 80 or 443 are still allocated by non-Docker processes. Please stop them manually before deploying CapRover. Details: {{ port_check_result.stdout }}"
-#   when: port_check_result.stdout != "" and port_check_result.rc == 0
-#   tags: [caprover_prerequisites]
-
 - name: Ensure /captain directory exists
   ansible.builtin.file:
     path: /captain
     state: directory
-    mode: '0755'
+    mode: "0755"
     owner: root
     group: root
   tags:
@@ -94,6 +89,7 @@
     - caprover_prerequisites
     - firewall
 
+# still work but on second time run it does fail. but not got solution.
 - name: Deploy CapRover container
   community.docker.docker_container:
     name: captain-root
@@ -109,8 +105,6 @@
     env:
       ACCEPTED_TERMS: "true"
       MAIN_NODE_IP_ADDRESS: "{{ ansible_default_ipv4.address }}"
-      # You can pre-set login password if needed
-      # DEFAULT_PASSWORD: "{{ caprover_default_password | default('captain42') }}"
     state: started
     labels:
       com.caprover.app.name: captain-root
@@ -122,7 +116,8 @@
     log_opt:
       max-size: "10m"
       max-file: "3"
-    recreate: yes
+    # recreate: "{{ caprover_force_recreate | default(false) }}"
+    # purge_networks: true
   tags:
     - caprover_install
     - caprover_service

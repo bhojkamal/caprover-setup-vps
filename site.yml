@@ -2,6 +2,13 @@
 - name: Set up server for application
   hosts: all
   become: true
+
+  pre_tasks:
+    - name: Fail if no limit is specified
+      ansible.builtin.fail:
+        msg: "You must use --limit (-l) to specify the target host or group."
+      when: ansible_limit is not defined
+
   roles:
     - users
     - common

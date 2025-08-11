@@ -1,0 +1,3 @@
+users:
+  - name: caprover_lara
+    key_path: "/home/bhojkamal/.ssh/id_rsa.pub"

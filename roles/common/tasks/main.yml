@@ -5,7 +5,7 @@
       sleep 5
     done
   changed_when: false
-  
+
 - name: Update and upgrade apt packages
   apt:
     update_cache: yes
@@ -23,4 +23,4 @@
 
 - name: Set timezone to Asia/Kathmandu
   timezone:
-    name: Asia/Kathmandu    
+    name: Asia/Kathmandu
