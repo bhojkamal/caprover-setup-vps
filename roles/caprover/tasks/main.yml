@@ -16,8 +16,7 @@
     msg: "Container {{ item.Names[0] }} ({{ item.Id }}) is using ports: {{ item.Ports }}"
   loop: "{{ docker_containers.containers }}"
   when:
-    - item.State.Running is defined and item.State.Running == true
-    - item.Ports is defined
+    - item.State.Running | default(false)
     - item.Ports | selectattr('PublicPort', 'defined') | selectattr('PublicPort', 'in', [80, 443]) | list | length > 0
   tags: [caprover_prerequisites]
 
@@ -28,15 +27,13 @@
     force_kill: true
   loop: "{{ docker_containers.containers }}"
   when:
-    - item.State.Running is defined and item.State.Running == true
-    - item.Ports is defined
+    - item.State.Running | default(false)
     - item.Ports | selectattr('PublicPort', 'defined') | selectattr('PublicPort', 'in', [80, 443]) | list | length > 0
   ignore_errors: true
   tags: [caprover_prerequisites]
 
 - name: Clean up dangling Docker resources (networks, volumes)
-  ansible.builtin.shell: |
-    docker system prune --force --volumes
+  ansible.builtin.shell: docker system prune --force --volumes
   register: docker_prune_result
   changed_when: "'Total reclaimed space' in docker_prune_result.stdout"
   tags: [caprover_prerequisites]
@@ -80,16 +77,12 @@
     mode: "0755"
     owner: root
     group: root
-  tags:
-    - caprover_prerequisites
+  tags: [caprover_prerequisites]
 
 - name: Open firewall ports
   ansible.builtin.include_tasks: firewall.yml
-  tags:
-    - caprover_prerequisites
-    - firewall
+  tags: [caprover_prerequisites, firewall]
 
-# still work but on second time run it does fail. but not got solution.
 - name: Deploy CapRover container
   community.docker.docker_container:
     name: captain-root
@@ -116,9 +109,4 @@
     log_opt:
       max-size: "10m"
       max-file: "3"
-    # recreate: "{{ caprover_force_recreate | default(false) }}"
-    # purge_networks: true
-  tags:
-    - caprover_install
-    - caprover_service
-    - caprover_prerequisites
+  tags: [caprover_install, caprover_service, caprover_prerequisites]
