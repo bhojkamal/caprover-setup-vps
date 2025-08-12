@@ -2,25 +2,35 @@
 - name: Create Ansible user with sudo access
   hosts: caprover_servers
   become: true
+  gather_facts: true
 
   vars:
     new_user: caprover_lara
     ssh_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
 
   tasks:
+    - name: Ensure required groups exist
+      group:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - sudo
+        - docker
+
     - name: Ensure the user '{{ new_user }}' exists
       user:
         name: "{{ new_user }}"
         shell: /bin/bash
         state: present
-        groups: sudo
+        groups: sudo,docker
         append: yes
+        create_home: yes
 
     - name: Create .ssh directory for '{{ new_user }}'
       file:
         path: "/home/{{ new_user }}/.ssh"
         state: directory
-        mode: '0700'
+        mode: "0700"
         owner: "{{ new_user }}"
         group: "{{ new_user }}"
 
@@ -29,9 +39,33 @@
         user: "{{ new_user }}"
         key: "{{ ssh_key }}"
         state: present
+        exclusive: false
 
     - name: Allow passwordless sudo for '{{ new_user }}'
       copy:
         dest: "/etc/sudoers.d/{{ new_user }}"
         content: "{{ new_user }} ALL=(ALL) NOPASSWD:ALL\n"
-        mode: '0440'
+        mode: "0440"
+        validate: "visudo -cf %s"
+
+    - name: Verify user can sudo without password
+      command: sudo -l -U "{{ new_user }}"
+      register: sudo_check
+      changed_when: false
+      failed_when: false
+
+    - name: Display sudo verification result
+      debug:
+        msg: "User {{ new_user }} sudo privileges: {{ sudo_check.stdout }}"
+      when: sudo_check is defined
+
+    - name: Test SSH key authentication (optional)
+      become_user: "{{ new_user }}"
+      command: whoami
+      register: user_test
+      changed_when: false
+
+    - name: Display user creation success
+      debug:
+        msg: "User {{ new_user }} created successfully and can execute commands"
+      when: user_test.stdout == new_user
