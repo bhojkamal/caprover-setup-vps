@@ -1,49 +1,28 @@
 ---
-# Ensure UFW is installed
 - name: Install UFW
   ansible.builtin.package:
     name: ufw
     state: present
 
-# Set default incoming policy to deny
-- name: Set default incoming policy to deny
+- name: Set UFW default policies
   community.general.ufw:
-    direction: incoming
-    policy: deny
-    state: enabled
+    direction: "{{ item.direction }}"
+    policy: "{{ item.policy }}"
+  loop:
+    - { direction: incoming, policy: deny }
+    - { direction: outgoing, policy: allow }
 
-# Set default outgoing policy to allow
-- name: Set default outgoing policy to allow
-  community.general.ufw:
-    direction: outgoing
-    policy: allow
-    state: enabled
-
-# Allow necessary CapRover ports
-- name: Allow CapRover ports (HTTP, HTTPS, Web UI)
+- name: Allow CapRover ports
   community.general.ufw:
     rule: allow
     port: "{{ item }}"
     proto: tcp
   loop:
-    - 80
-    - 443
-    - 3000
+    - "22" # SSH
+    - "80" # HTTP
+    - "443" # HTTPS
+    - "3000" # CapRover UI
 
-# Optional: Allow SSH (VERY IMPORTANT if you're locking down UFW)
-- name: Allow SSH
-  community.general.ufw:
-    rule: allow
-    name: OpenSSH
-
-# Enable UFW if not already enabled
-- name: Ensure UFW is enabled
+- name: Enable UFW
   community.general.ufw:
     state: enabled
-    
-# Allow SSH access on a specific port (if not using default port 22)    
-- name: Allow SSH access
-  community.general.ufw:
-    rule: allow
-    port: 22
-    proto: tcp

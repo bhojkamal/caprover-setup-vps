@@ -1,73 +1,8 @@
 ---
-- name: Ensure lsof is installed for port checks
+- name: Ensure lsof is installed
   ansible.builtin.package:
     name: lsof
     state: present
-  tags: [caprover_prerequisites]
-
-- name: Get all containers info
-  community.docker.docker_host_info:
-    containers: yes
-  register: docker_containers
-  tags: [caprover_prerequisites]
-
-- name: Show containers using 80 or 443
-  debug:
-    msg: "Container {{ item.Names[0] }} ({{ item.Id }}) is using ports: {{ item.Ports }}"
-  loop: "{{ docker_containers.containers }}"
-  when:
-    - item.State.Running | default(false)
-    - item.Ports | selectattr('PublicPort', 'defined') | selectattr('PublicPort', 'in', [80, 443]) | list | length > 0
-  tags: [caprover_prerequisites]
-
-- name: Stop and remove containers using port 80 or 443
-  community.docker.docker_container:
-    name: "{{ item.Names[0] | regex_replace('^/', '') }}"
-    state: absent
-    force_kill: true
-  loop: "{{ docker_containers.containers }}"
-  when:
-    - item.State.Running | default(false)
-    - item.Ports | selectattr('PublicPort', 'defined') | selectattr('PublicPort', 'in', [80, 443]) | list | length > 0
-  ignore_errors: true
-  tags: [caprover_prerequisites]
-
-- name: Clean up dangling Docker resources (networks, volumes)
-  ansible.builtin.shell: docker system prune --force --volumes
-  register: docker_prune_result
-  changed_when: "'Total reclaimed space' in docker_prune_result.stdout"
-  tags: [caprover_prerequisites]
-
-- name: Display Docker prune results
-  debug:
-    msg: "{{ docker_prune_result.stdout_lines }}"
-  when: docker_prune_result.stdout != ""
-  tags: [caprover_prerequisites]
-
-- name: Restart Docker service to ensure ports are released
-  ansible.builtin.systemd:
-    name: docker
-    state: restarted
-    daemon_reload: true
-  tags: [caprover_prerequisites]
-
-- name: Wait for 10 seconds after Docker restart for daemon to stabilize
-  ansible.builtin.pause:
-    seconds: 10
-  tags: [caprover_prerequisites]
-
-- name: Check for non-Docker processes using port 80 or 443
-  ansible.builtin.shell: |
-    lsof -i :80 || lsof -i :443
-  register: port_check_result
-  failed_when: false
-  changed_when: false
-  tags: [caprover_prerequisites]
-
-- name: Display processes using port 80 or 443 (if any)
-  debug:
-    msg: "WARNING: The following processes are using ports 80 or 443: {{ port_check_result.stdout }}"
-  when: port_check_result.stdout != ""
   tags: [caprover_prerequisites]
 
 - name: Ensure /captain directory exists
@@ -83,30 +18,87 @@
   ansible.builtin.include_tasks: firewall.yml
   tags: [caprover_prerequisites, firewall]
 
-- name: Deploy CapRover container
-  community.docker.docker_container:
-    name: captain-root
-    image: caprover/caprover:latest
-    restart_policy: always
-    ports:
-      - "80:80"
-      - "443:443"
-      - "3000:3000"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /captain:/captain
-    env:
-      ACCEPTED_TERMS: "true"
-      MAIN_NODE_IP_ADDRESS: "{{ ansible_default_ipv4.address }}"
-    state: started
-    labels:
-      com.caprover.app.name: captain-root
-    networks:
-      - name: bridge
-    cpu_shares: 512
-    memory: "512m"
-    log_driver: json-file
-    log_opt:
-      max-size: "10m"
-      max-file: "3"
-  tags: [caprover_install, caprover_service, caprover_prerequisites]
+# Quick idempotency check
+- name: Check if CapRover is already working
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:3000"
+    method: GET
+    status_code: [200, 302, 404]
+    timeout: 5
+  register: caprover_check
+  failed_when: false
+  tags: [caprover_check]
+
+- name: Skip deployment - CapRover already working
+  debug:
+    msg: "✅ CapRover already working at http://{{ ansible_default_ipv4.address }}:3000"
+  when: caprover_check.status is defined and caprover_check.status in [200, 302, 404]
+
+# Deploy only if CapRover not working
+- block:
+    - name: Stop Docker service
+      ansible.builtin.systemd:
+        name: docker
+        state: stopped
+
+    - name: Kill processes on CapRover ports
+      ansible.builtin.shell: |
+        for port in 80 443 3000; do
+          fuser -k $port/tcp 2>/dev/null || true
+        done
+
+    - name: Clean Docker networking
+      ansible.builtin.shell: |
+        iptables -t nat -F DOCKER 2>/dev/null || true
+        iptables -t filter -F DOCKER 2>/dev/null || true
+        ip link delete docker0 2>/dev/null || true
+
+    - name: Start Docker service
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+
+    - name: Wait for Docker to stabilize
+      ansible.builtin.pause:
+        seconds: 10
+
+    - name: Deploy CapRover container
+      community.docker.docker_container:
+        name: captain-root
+        image: caprover/caprover:latest
+        restart_policy: always
+        ports:
+          - "80:80"
+          - "443:443"
+          - "3000:3000"
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock
+          - /captain:/captain
+        env:
+          ACCEPTED_TERMS: "true"
+          MAIN_NODE_IP_ADDRESS: "{{ ansible_default_ipv4.address }}"
+        state: started
+        labels:
+          com.caprover.app.name: captain-root
+      register: caprover_deployment
+
+    - name: Wait for CapRover to be ready
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:3000"
+        method: GET
+        status_code: [200, 302, 404]
+      register: caprover_ready
+      until: caprover_ready.status in [200, 302, 404]
+      retries: 30
+      delay: 5
+
+  when: not (caprover_check.status is defined and caprover_check.status in [200, 302, 404])
+  tags: [caprover_deploy]
+
+- name: Display CapRover access info
+  debug:
+    msg:
+      - "🎉 CapRover is ready!"
+      - "Web Interface: http://{{ ansible_default_ipv4.address }}:3000"
+      - "HTTP: http://{{ ansible_default_ipv4.address }}"
+      - "HTTPS: https://{{ ansible_default_ipv4.address }}"
